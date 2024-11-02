@@ -79,7 +79,6 @@ impl Game {
     }
 
     fn press(&mut self, mb: MouseButton, x: u16, y: u16) {
-        self.msweeper.term.print(&format!("{} {}", x, y), 1, 1);
         match mb {
             MouseButton::Left => self.press_left(x, y),
             MouseButton::Right => self.press_right(x, y),

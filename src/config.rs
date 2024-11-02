@@ -18,7 +18,7 @@ impl Config {
     const HELP_OPTION: &'static str = "h";
     const WIDTH_OPTION: &'static str = "w";
     const MINE_NUM_OPTION: &'static str = "m";
-    const HEIGHT_OPTION: &'static str = "h";
+    const HEIGHT_OPTION: &'static str = "e";
     const DEFAULT_WIDTH: usize = 10;
     const DEFAULT_HEIGHT: usize = 10;
     const DEFAULT_MINE_NUM: usize = 10;

@@ -5,24 +5,27 @@ use std::io::{stdout, Write};
 use termion::clear;
 use termion::color;
 use termion::cursor;
+use termion::input::MouseTerminal;
 use termion::raw::IntoRawMode;
 use termion::raw::RawTerminal;
 use termion::screen::AlternateScreen;
 use termion::screen::IntoAlternateScreen;
 
 pub struct Terminal {
-    pub stdout: AlternateScreen<RawTerminal<std::io::Stdout>>,
+    pub stdout: MouseTerminal<AlternateScreen<RawTerminal<std::io::Stdout>>>,
 }
 
 // static
 impl Terminal {
     pub fn construct() -> Terminal {
         let mut term = Terminal {
-            stdout: stdout()
-                .into_raw_mode()
-                .unwrap()
-                .into_alternate_screen()
-                .unwrap(),
+            stdout: MouseTerminal::from(
+                stdout()
+                    .into_raw_mode()
+                    .unwrap()
+                    .into_alternate_screen()
+                    .unwrap(),
+            ),
         };
 
         term.clear();
@@ -36,6 +39,19 @@ impl Terminal {
     pub fn clear(&mut self) {
         // 画面全体をクリアする
         write!(self.stdout, "{}{}", clear::All, cursor::Hide).unwrap();
+        // 最後にフラッシュする
+        self.flush();
+    }
+
+    pub fn clear_line(&mut self, y: usize) {
+        // 画面全体をクリアする
+        write!(
+            self.stdout,
+            "{}{}",
+            cursor::Goto(1, (y + 1) as u16),
+            clear::CurrentLine
+        )
+        .unwrap();
         // 最後にフラッシュする
         self.flush();
     }

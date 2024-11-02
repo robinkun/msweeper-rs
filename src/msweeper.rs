@@ -33,16 +33,33 @@ struct Space {
 
 pub struct Msweeper {
     mine_num: usize,
-    pub term: Terminal,
+    term: Terminal,
     board_offset: Point<usize>,
+    remain_offset: Point<usize>,
+    controls_offset: Point<usize>,
+    cmn_msg_offset: Point<usize>,
     started: bool,
-    opened_num: usize,
 
-    board: Vec<Vec<Space>>,
+    opened_num: usize,
+    flag_num: usize,
+
+    board: Box<Vec<Vec<Space>>>,
 }
 
 impl Msweeper {
-    const DEFAULT_BOARD_OFFSET: Point<usize> = Point { x: 2, y: 3 };
+    const DEFAULT_BOARD_OFFSET: Point<usize> = Point { x: 2, y: 6 };
+    const DEFAULT_CONTROLS_OFFSET: Point<usize> = Point {
+        x: Self::DEFAULT_BOARD_OFFSET.x,
+        y: 1,
+    };
+    const DEFAULT_CMN_MSG_OFFSET: Point<usize> = Point {
+        x: Self::DEFAULT_BOARD_OFFSET.x,
+        y: 2,
+    };
+    const DEFAULT_REMAIN_OFFSET: Point<usize> = Point {
+        x: Self::DEFAULT_BOARD_OFFSET.x,
+        y: 4,
+    };
 
     pub fn width(&self) -> usize {
         if self.height() <= 0 {
@@ -55,7 +72,54 @@ impl Msweeper {
         self.board.len()
     }
 
+    fn _print_message(&mut self, str: &str, p: &Point<usize>) {
+        self.term.color_bg(color::Reset);
+        self.term.color_fg(color::Reset);
+        self.term.clear_line(p.y);
+        self.term.print(str, p.x, p.y);
+    }
+
+    fn _print_gameover(&mut self) {
+        self._print_message(
+            &format!(
+                "{}[Game Over]{} Press 'Enter' to reset.",
+                color::Bg(color::Red),
+                color::Bg(color::Reset)
+            ),
+            &self.cmn_msg_offset.clone(),
+        );
+    }
+
+    fn _print_gameclear(&mut self) {
+        self._print_message(
+            &format!(
+                "{}[Game Clear]{} Press 'Enter' to reset.",
+                color::Bg(color::Green),
+                color::Bg(color::Reset)
+            ),
+            &self.cmn_msg_offset.clone(),
+        );
+    }
+
+    fn _print_controls(&mut self) {
+        self._print_message(
+            &format!("Press 'q' to quit, Left click to open, Right click to set flag."),
+            &self.controls_offset.clone(),
+        );
+    }
+
+    fn _print_remain(&mut self) {
+        self._print_message(
+            &format!(
+                "REMAIN: {}",
+                (self.mine_num as isize) - (self.flag_num as isize)
+            ),
+            &self.remain_offset.clone(),
+        );
+    }
+
     pub fn flush(&mut self) {
+        self._print_remain();
         self.term.flush();
     }
 
@@ -128,8 +192,11 @@ impl Msweeper {
     pub fn clean(&mut self) {
         self.started = false;
         self.opened_num = 0;
+        self.flag_num = 0;
         // for only set unopened.
+        self.term.clear();
         self._clean_board();
+        self._print_controls();
         self.print_all_spaces();
         self.flush();
     }
@@ -180,7 +247,7 @@ impl Msweeper {
         self.term.print(
             print_str,
             self.board_offset.x + p.x * 2,
-            self.board_offset.x + p.y,
+            self.board_offset.y + p.y,
         );
     }
 
@@ -219,9 +286,9 @@ impl Msweeper {
     }
 
     fn _print_flag(&mut self, p: &Point<usize>) {
-        self.term.color_fg(color::LightRed);
+        self.term.color_fg(color::Red);
         self.term.color_bg(color::LightBlack);
-        self._stdout_space("<|", p)
+        self._stdout_space(&format!("P{}|", color::Fg(color::White)), p)
     }
 
     fn _print_mine(&mut self, p: &Point<usize>) {
@@ -260,9 +327,11 @@ impl Msweeper {
         match self.board[p.y][p.x].state {
             SpaceState::UNOPENED => {
                 self.board[p.y][p.x].state = SpaceState::FLAG;
+                self.flag_num += 1;
             }
             SpaceState::FLAG => {
                 self.board[p.y][p.x].state = SpaceState::UNOPENED;
+                self.flag_num -= 1;
             }
             _ => {}
         }
@@ -321,12 +390,14 @@ impl Msweeper {
     }
 
     fn _get_press_pos(&mut self, cursor_x: usize, cursor_y: usize) -> Option<Point<usize>> {
-        if (cursor_x < (self.board_offset.x + 1)) || (cursor_y < self.board_offset.y) {
+        let b_x = self.board_offset.x + 1;
+        let b_y = self.board_offset.y + 1;
+        if (cursor_x < (b_x)) || (cursor_y < b_y) {
             return None;
         }
         return Some(Point::<usize> {
-            x: (cursor_x - (self.board_offset.x + 1)) / 2,
-            y: cursor_y - self.board_offset.y,
+            x: (cursor_x - b_x) / 2,
+            y: cursor_y - b_y,
         });
     }
 
@@ -353,6 +424,7 @@ impl Msweeper {
 
     fn _open_mine(&mut self, p: &Point<usize>) {
         self._open_all(p);
+        self._print_gameover();
     }
 
     fn _open_1(&mut self, p_i: &Point<isize>) -> bool {
@@ -408,6 +480,10 @@ impl Msweeper {
             SpaceState::OPENED => self._open_8(&p_i),
         };
 
+        if (rv == false) && self.is_clear() {
+            self._print_gameclear();
+        }
+
         return rv;
     }
 
@@ -436,13 +512,17 @@ impl Msweeper {
             state: SpaceState::UNOPENED,
             stype: SpaceType::EMPTY,
         };
-        let mut _board = vec![vec![_space.clone(); width]; height];
+        let mut _board = Box::new(vec![vec![_space.clone(); width]; height]);
         let mut msweeper = Msweeper {
             mine_num,
             term: Terminal::construct(),
             board_offset: Self::DEFAULT_BOARD_OFFSET,
+            remain_offset: Self::DEFAULT_REMAIN_OFFSET,
+            controls_offset: Self::DEFAULT_CONTROLS_OFFSET,
+            cmn_msg_offset: Self::DEFAULT_CMN_MSG_OFFSET,
             started: false,
             opened_num: 0,
+            flag_num: 0,
             board: _board,
         };
 
